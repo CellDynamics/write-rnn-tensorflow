@@ -21,12 +21,12 @@ class Model():
             raise Exception("model type not supported: {}".format(args.model))
 
         def get_cell():
-            return cell_fn(args.rnn_size, state_is_tuple=False)
+            return cell_fn(args.rnn_size, state_is_tuple=False, activation=tf.tanh)
 
         cell = tf.contrib.rnn.MultiRNNCell(
             [get_cell() for _ in range(args.num_layers)])
 
-        if (infer == False and args.keep_prob < 1):  # training mode
+        if (infer is False and args.keep_prob < 1):  # training mode
             cell = tf.contrib.rnn.DropoutWrapper(
                 cell, output_keep_prob=args.keep_prob)
 
