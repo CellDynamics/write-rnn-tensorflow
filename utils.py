@@ -8,12 +8,25 @@ import svgwrite
 from IPython.display import SVG, display
 
 
+def get_one_letter(data, n):
+    """Get one letter and return absolute coords.
+    """
+    num = np.sum(data[:, 2])  # total number of pen lifts, number of letters is +1
+    idx = np.where(data[:, 2] == 1)[0]
+    idx = np.concatenate(([0], idx))  # 0 is starting index, se -1 as we increment next
+    r = range(idx[n] + 1, idx[n + 1] + 1)  # include 1 as last point from letter, but start from next after 1
+    x = np.cumsum(data[r, 0])
+    y = np.cumsum(data[r, 1])
+    return x, y
+
+
 def get_bounds(data, factor):
     min_x = 0
     max_x = 0
     min_y = 0
     max_y = 0
 
+    # strokes contain first point recorded as absolute, next as relative to previous.
     abs_x = 0
     abs_y = 0
     for i in range(len(data)):
@@ -21,6 +34,8 @@ def get_bounds(data, factor):
         y = float(data[i, 1]) / factor
         abs_x += x
         abs_y += y
+        # find boundaries after tracking those relative and absolute
+        # it soes not capture possible pen lifts up
         min_x = min(min_x, abs_x)
         min_y = min(min_y, abs_y)
         max_x = max(max_x, abs_x)
