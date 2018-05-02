@@ -10,6 +10,8 @@ from IPython.display import SVG, display
 
 def get_one_letter(data, n):
     """Get one letter and return absolute coords.
+
+    Last point is labeled by 1 in stroke column
     """
     num = np.sum(data[:, 2])  # total number of pen lifts, number of letters is +1
     idx = np.where(data[:, 2] == 1)[0]
@@ -210,6 +212,11 @@ def draw_strokes_pdf(data, param, factor=10, svg_filename='sample_pdf.svg'):
 
 
 class DataLoader():
+    """
+    Examples:
+    draw_strokes(data_loader.raw_data[0]) - one stroke (many letters - this is one sentence written by person)
+    """
+
     def __init__(
             self,
             batch_size=50,
@@ -312,23 +319,47 @@ class DataLoader():
 
     def load_preprocessed(self, data_file):
         f = open(data_file, "rb")
+        # contains array of strokes (each can be many letters). Each letter starts with absolute coords
+        # and ends with 1 in pen column:
+        # raw_data[10][:100,:] =
+        # array([[ 322,  306,    0],
+        # [  -4,    4,    0],
+        # [  -9,   13,    0],
+        # [ -15,   21,    0],
+        # [ -27,   26,    0],
+        # [ -31,   38,    0],
+        # [ -31,   45,    0],
+        # [ -31,   48,    0],
+        # [ -32,   41,    0],
+        # [ -26,   33,    0],
+        # [ -11,   35,    0],
+        # [  -5,   17,    0],
+        # [   6,   16,    0],
+        # [   9,    8,    0],
+        # [  18,    7,    0],
+        # [  19,    4,    0],
+        # [  19,  -12,    1],
+        # [ 239, -302,    0],
+        # [  -4,    5,    0],
+        # [  -4,   13,    0],
         self.raw_data = pickle.load(f)
         f.close()
 
         # goes thru the list, and only keeps the text entries that have more
         # than seq_length points
+        # list of processed (scaled, removed long distances) strokes. Each stroke has many letters (1s in 3rd column)
         self.data = []
         self.valid_data = []
         counter = 0
 
         # every 1 in 20 (5%) will be used for validation data
         cur_data_counter = 0
-        for data in self.raw_data:
+        for data in self.raw_data:  # over strokes (not letters)
             if len(data) > (self.seq_length + 2):
                 # removes large gaps from the data
-                data = np.minimum(data, self.limit)
+                data = np.minimum(data, self.limit)  # replace values in data by limit if the are larger than limit
                 data = np.maximum(data, -self.limit)
-                data = np.array(data, dtype=np.float32)
+                data = np.array(data, dtype=np.float32)  # convert to float
                 data[:, 0:2] /= self.scale_factor
                 cur_data_counter = cur_data_counter + 1
                 if cur_data_counter % 20 == 0:
@@ -336,6 +367,9 @@ class DataLoader():
                 else:
                     self.data.append(data)
                     # number of equiv batches this datapoint is worth
+                    # data are points that form one stroke (many letters)
+                    # XXX: seq_length seems to be number of points ber batch
+                    # From each stroke we will take seq_length points (only once, see next_batch)
                     counter += int(len(data) / ((self.seq_length + 2)))
 
         print("train data: {}, valid data: {}".format(
@@ -355,14 +389,23 @@ class DataLoader():
         return x_batch, y_batch
 
     def next_batch(self):
+        """
+        Assumes that all strokes are longer than demanded seq_length. From each stroke we pick one
+        seqence of length of seq_length starting from randomly selected point.
+        For each stroke we return x and y while y are shifted per one point.
+        Each batch is collected from different stroke. So batch_size stands for number of strokes (different) taken
+        to one batch. If stroke is long we allow to sample it again (do not move batch pointer) which makes sense
+        because we use random starting point for each stroke.
+        Each stroke can contain many pen lifts up
+        """
         # returns a randomised, seq_length sized portion of the training data
         x_batch = []
         y_batch = []
         for i in range(self.batch_size):
-            data = self.data[self.pointer]
+            data = self.data[self.pointer]  # select next stroke
             # number of equiv batches this datapoint is worth
             n_batch = int(len(data) / ((self.seq_length + 2)))
-            idx = random.randint(0, len(data) - self.seq_length - 2)
+            idx = random.randint(0, len(data) - self.seq_length - 2)  #
             x_batch.append(np.copy(data[idx:idx + self.seq_length]))
             y_batch.append(np.copy(data[idx + 1:idx + self.seq_length + 1]))
             # adjust sampling probability.
