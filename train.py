@@ -74,9 +74,11 @@ def train(args):
                 ith_train_step = e * data_loader.num_batches + b
                 start = time.time()
                 x, y = data_loader.next_batch()
+                # len(x)==50, x[0].shape==(300,3)
+                # np.all(x[0][1:,:]==y[0][:-1,:])
                 feed = {
                     model.input_data: x,
-                    model.target_data: y,
+                    model.target_data: y,  # these are lists but in Model became np arrays [len(x) x[0].shape]
                     model.state_in: state}
                 train_loss_summary, train_loss, state, _ = sess.run(
                     [model.train_loss_summary, model.cost, model.state_out, model.train_op], feed)
